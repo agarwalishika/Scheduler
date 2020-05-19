@@ -5,8 +5,9 @@ using System.Collections.Generic;
 public class Calendar
 {
 
-	static class Constants
+	public static class Constants
 	{
+		// 60 should be divisible by the time slot duration!!
 		public const int timeslotDuration = 10;
 	}
 
@@ -16,37 +17,81 @@ public class Calendar
 		timeslots = new List<Timeslot>();
 	}
 
-	internal Boolean areTimeslotsAvailable(DateTime startTime, DateTime endTime) {
-		int startIndex = calculateDifferenceInTimeslots(startTime, timeslots[0].getTimeslotStartTime());
-		int endIndex = startIndex + calculateDifferenceInTimeslots(endTime, startTime);
+	internal int numExperimentsInTimeInterval(DateTime startTime, DateTime endTime) {
+		if (timeslots.Count == 0) {
+			return 0;
+		}
 
-		if (startIndex < timeslots.Count || endIndex < timeslots.Count) {
-			return false;
-		} else if (timeslots[startIndex].getExperimentOccurrence() != null) {
-			return false;
-		} else if (timeslots[endIndex].getExperimentOccurrence() != null){
-			return false;
+		int startindex = calculateDifferenceInTimeslots(startTime, timeslots[0].getTimeslotStartTime());
+		int endIndex = calculateDifferenceInTimeslots(timeslots[timeslots.Count - 1].getTimeslotStartTime(), endTime);
+
+		if ((startindex < 0 && endIndex < 0)
+			|| (startindex >= timeslots.Count && endIndex >= timeslots.Count)){
+			return 0;
+		}
+
+		int numExperiments = 0;
+		for (int i = startindex; i <= endIndex; i++) {
+			Schedule sch = timeslots[i].getExperimentOccurrence().getExperiment().getSchedule();
+			int totalMins = sch.getNumOfOccurrences();
+			DateTime expEndTime = sch.getExperimentStartTime().AddMinutes(totalMins);
+		}
+
+
+		return 0;
+	}
+
+	internal Boolean areTimeslotsAvailable(DateTime startTime, DateTime endTime) {
+		if (timeslots.Count == 0) {
+			return true;
+		}
+
+		int startIndex = calculateDifferenceInTimeslots(startTime, timeslots[0].getTimeslotStartTime());
+		int endIndex = calculateDifferenceInTimeslots(endTime, timeslots[0].getTimeslotStartTime());
+
+		if ((startIndex >= timeslots.Count && endIndex >= timeslots.Count)
+			|| (startIndex < 0 && endIndex <= 0)
+			|| (startIndex == 0 && endIndex == -1)) {
+			return true;
+		}
+
+		if (startIndex < 0) {
+			startIndex = 0;
+		} if (endIndex > timeslots.Count - 1) {
+			endIndex = timeslots.Count - 1;
+		}
+
+		for (int i = startIndex; i <= endIndex; i++) {
+			if (timeslots[i].getExperimentOccurrence() != null) {
+				return false;
+			}
 		}
 
 		return true;
 	}
 
-	private int calculateDifferenceInTimeslots(DateTime timeOne, DateTime timeTwo) {
-		int offset = timeOne.Minute % 10;
+	int calculateDifferenceInTimeslots(DateTime timeTwo, DateTime timeOne) {
+		/*if (timeTwo.CompareTo(timeOne) < 0) {
+			DateTime t = timeTwo;
+			timeTwo = timeOne;
+			timeOne = t;
+		}*/
 
-		if (offset != 0) {
-			timeOne.AddMinutes(-1 * offset);
-		}
+		int offset = timeTwo.Minute % Constants.timeslotDuration;
 
-		// assuming that the every experiment will finish within a month
-		//DateTime timeTwo = timeslots[0].getTimeslotStartTime();
+		//if (offset != 0) {
+			timeTwo = timeTwo.AddMinutes(Constants.timeslotDuration - offset);
+		//}
 
-		// each day has 24 hours, each hour has 60 minutes
-		int numTimeslotsDifference = (timeOne.DayOfYear - timeTwo.DayOfYear) * (24 * 60) / Constants.timeslotDuration;
-		numTimeslotsDifference += (timeOne.Hour - timeTwo.Hour) * (60 / Constants.timeslotDuration);
-		numTimeslotsDifference += (timeOne.Minute - timeTwo.Minute) / Constants.timeslotDuration;
+		offset = timeOne.Minute % Constants.timeslotDuration;
 
-		return numTimeslotsDifference;
+		//if (offset != 0) {
+			timeOne = timeOne.AddMinutes(-1 * offset);
+		//}
+
+		TimeSpan span = timeTwo.Subtract(timeOne);
+		
+		return Convert.ToInt32(span.TotalMinutes / Constants.timeslotDuration) - 1;
 	}
 
 	private void createTimeSlots2(DateTime startTime, DateTime endTime) {
@@ -121,7 +166,7 @@ public class Calendar
 		 */
 
 		if (timeslots.Count == 0) {
-			int numTimeslots = calculateDifferenceInTimeslots(startTime, endTime);
+			int numTimeslots = calculateDifferenceInTimeslots(endTime, startTime);
 			for (int i = 0; i < numTimeslots; i++) {
 				DateTime newDT = startTime.AddMinutes(i * Constants.timeslotDuration);
 				timeslots.Add(new Timeslot(newDT, Constants.timeslotDuration));
@@ -139,18 +184,10 @@ public class Calendar
 				timeslots.Insert(0, new Timeslot(newDT, Constants.timeslotDuration));
 			}
 		}
-		else if (startIndex > timeslots.Count) {
-			// 3
-			for (int i = timeslots.Count; i < startIndex; i++) {
-				Timeslot last = timeslots[timeslots.Count - 1];
-				DateTime newDT = last.getTimeslotStartTime().AddMinutes(Constants.timeslotDuration);
-				timeslots.Add(new Timeslot(newDT, Constants.timeslotDuration));
-			}
-		}
 
 
-		DateTime lastTime = timeslots[timeslots.Count].getTimeslotStartTime();
-		int endIndex = calculateDifferenceInTimeslots(endTime, lastTime);
+		DateTime lastTime = timeslots[timeslots.Count - 1].getTimeslotStartTime();
+		int endIndex = timeslots.Count - 1 + calculateDifferenceInTimeslots(endTime, lastTime);
 
 		if (endIndex > timeslots.Count) {
 			// 5
@@ -162,22 +199,31 @@ public class Calendar
 		}
 	}
 
-	internal Boolean scheduleExperimentOccurrence(ExperimentOccurrence expOcc){
+	internal void scheduleExperimentOccurrence(ExperimentOccurrence expOcc){
 		DateTime startTime = expOcc.getOccurrenceStartTime();
 		DateTime endTime = startTime.AddMinutes(expOcc.getExperiment().getSchedule().getOccurrenceDuration());
 		createTimeSlots(startTime, endTime);
 
-		int startIndex = calculateDifferenceInTimeslots(timeslots[0].getTimeslotStartTime(), startTime);
-		int endIndex = calculateDifferenceInTimeslots(startTime, endTime);
 
-		for (int i = startIndex; i <= endIndex; i++) {
+		int startIndex = calculateDifferenceInTimeslots(startTime, timeslots[0].getTimeslotStartTime());
+		int endIndex = calculateDifferenceInTimeslots(endTime, timeslots[0].getTimeslotStartTime());
+
+		for (int i = startIndex; i < endIndex; i++) {
 			timeslots[i].setExperimentOccurrence(expOcc);
 		}
-
-		return true;
 	}
 
 	public void printCalendar() {
+		for(int i = 0; i < timeslots.Count; i++) {
+			string dateStr = timeslots[i].getTimeslotStartTime().ToString("dd/MM/yyyy HH:mm:ss");
+			Console.WriteLine("Timeslot start time: {0}", dateStr);
+			if (timeslots[i].getExperimentOccurrence() == null) {
+				Console.WriteLine("		Experiment name:");
+			} else {
+				Console.WriteLine("		Experiment name: {0}", timeslots[i].getExperimentOccurrence().getExperiment().getName());
+			}
+			Console.WriteLine("");
+		}
 
 	}
 }

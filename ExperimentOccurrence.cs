@@ -15,6 +15,10 @@ public class ExperimentOccurrence
 		return occurrenceStartTime;
 	}
 
+	public void setOccurrenceStartTime(DateTime occurrenceStartTime) {
+		this.occurrenceStartTime = occurrenceStartTime;
+	}
+
 	public Experiment getExperiment() {
 		return experimentBlueprint;
 	}
