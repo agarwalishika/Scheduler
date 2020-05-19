@@ -61,7 +61,7 @@ public class Calendar
 			endIndex = timeslots.Count - 1;
 		}
 
-		for (int i = startIndex; i <= endIndex; i++) {
+		for (int i = startIndex; i < endIndex; i++) {
 			if (timeslots[i].getExperimentOccurrence() != null) {
 				return false;
 			}
